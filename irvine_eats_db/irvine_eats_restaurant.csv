@@ -1,2 +1,1 @@
-restaurant_id,name,address,hours,category,phone,rating,url
-1,Brandywine,"557 E Peltason Dr, Irvine, CA 92617",7:15AM~10:00PM,cafeteria,,4.3, None
+place_id,name,address,phone,category,url
