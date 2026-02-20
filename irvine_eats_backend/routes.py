@@ -85,34 +85,51 @@ RESTAURANTS_BP = Blueprint("restaurants", __name__, url_prefix="/restaurants")
 
 @RESTAURANTS_BP.route("/add", methods=["POST"])
 def add_restaurant():
-    'Adds new restaurants to the database from Google Places API'
+    """Adds new restaurants to the database from Google Places API (upsert by place_id)."""
     conn = get_db_connection()
     cur = conn.cursor()
-    inserted = 0
+    upserted = 0
 
     for hit in fetch_nearby(LOCATION, RADIUS):
-        place_id = hit.get["place_id"]
+        place_id = hit.get("place_id")
         if not place_id:
             continue
+
         det = fetch_details(place_id)
 
         name = det.get("name") or hit.get("name")
-        address = det.get("formatted_address")
+        address = det.get("formatted_address") or hit.get("vicinity")
         phone = det.get("formatted_phone_number")
         url = det.get("website") or det.get("url")
 
         types = det.get("types", []) or hit.get("types", [])
-        category = next((t for t in types if t not in {"point_of_interest","establishment","food","restaurant"}), "restaurant")
+        category = next(
+            (t for t in types if t not in {"point_of_interest", "establishment", "food", "restaurant"}),
+            "restaurant"
+        )
+
+        hours_text = ""
 
         cur.execute(
-            "INSERT INTO restaurants (name, address, phone, category, url, place_id) VALUES (?, ?, ?, ?, ?, ?)",
-            (name, address, phone, category, url, place_id)
+            """
+            INSERT INTO restaurants (place_id, name, address, hours, category, phone, url)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(place_id) DO UPDATE SET
+                name=excluded.name,
+                address=excluded.address,
+                hours=excluded.hours,
+                category=excluded.category,
+                phone=excluded.phone,
+                url=excluded.url
+            """,
+            (place_id, name, address, hours_text, category, phone, url)
         )
-        inserted += 1
-    
+        upserted += 1
+
     conn.commit()
     conn.close()
-    return jsonify({"message": f"{inserted} restaurants added!"}), 201
+    return jsonify({"message": f"{upserted} restaurants upserted!"}), 201
+
 
 @RESTAURANTS_BP.route("/api/restaurants", methods=["GET"])
 def get_restaurant():
@@ -145,6 +162,22 @@ def get_menu():
         menu_items = conn.execute("SELECT * FROM menu where item_id = ?", (item_id,)).fetchall()
     conn.close()
     return jsonify([dict(m) for m in menu_items])
+
+#hour
+HOURS_BP = Blueprint("hours", __name__, url_prefix="/hours")
+
+@HOURS_BP.route("/add", methods=["POST"])
+def add_hours():
+    """Adds new hours to the database."""
+    data = request.get_json()
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO hours (restaurant_id, day, open_time, close_time) VALUES (?, ?, ?, ?)",
+        (data["restaurant_id"], data["day"], data["open_time"], data["close_time"])
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "hours added!"}), 201
 
 #review
 REVIEW_BP = Blueprint("review", __name__, url_prefix="/review")
