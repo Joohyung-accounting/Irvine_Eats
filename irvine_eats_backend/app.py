@@ -1,5 +1,6 @@
 from flask import Flask, send_from_directory
-from routes import (
+from flask_cors import CORS
+from app.routes import (
     USERS_BP,
     RESTAURANTS_BP,
     MENU_BP,
@@ -10,6 +11,7 @@ from routes import (
 )
 
 app = Flask(__name__, static_folder="../irvine_eats_frontend/dist", static_url_path="/")
+CORS(app)
 
 app.register_blueprint(USERS_BP)
 app.register_blueprint(RESTAURANTS_BP)
